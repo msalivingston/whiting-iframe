@@ -1,15 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta http-equiv="Content-Security-Policy" content="frame-ancestors https://*.wixsite.com https://*.wix.com https://whitingfarmshatchery.com *;">
-
 <meta charset="UTF-8">
 
 <style>
-  /* ————————————————————————————————
-     UNIVERSAL ORDER TEMPLATE STYLES
-     ———————————————————————————————— */
-
   .wf-section-row th {
     text-align: left !important;
     padding-left: 10px;
@@ -93,7 +87,6 @@
     }
   }
 
-  /* Customer info */
   .wf-input {
     width: 100%;
     padding: 6px 8px;
@@ -103,7 +96,6 @@
     border-radius: 4px;
   }
 
-  /* Staff pricing toggle */
   #staffPricingToggle {
     display: none; 
     margin: 12px 0;
@@ -116,19 +108,14 @@
 
 <div class="wf-order-wrapper">
 
-  <!-- Title dynamically set by mode -->
   <div id="wfFormTitle" class="wf-order-title">Chick Order Form</div>
 
-  <!-- STAFF PRICING TOGGLE (hidden unless staff mode) -->
   <div id="staffPricingToggle">
     Pricing:
     <label><input type="radio" name="staffPriceOption" value="retail"> Retail</label>
     <label style="margin-left:16px;"><input type="radio" name="staffPriceOption" value="wholesale" checked> Wholesale</label>
   </div>
 
-  <!-- ================================ -->
-  <!-- CUSTOMER INFORMATION             -->
-  <!-- ================================ -->
   <div id="wfCustomerInfo" style="margin-bottom:14px; font-family:Arial;">
 
     <h3 style="margin-bottom:6px;">Customer Information</h3>
@@ -178,9 +165,6 @@
 
   </div>
 
-  <!-- ================================ -->
-  <!-- HATCH DATE                      -->
-  <!-- ================================ -->
   <div class="wf-order-info" style="margin-bottom: 10px;">
     <label><strong>Requested Hatch Date:</strong></label>
     <select id="hatchDate">
@@ -188,9 +172,6 @@
     </select>
   </div>
 
-  <!-- ================================ -->
-  <!-- ORDER TABLE                      -->
-  <!-- ================================ -->
   <table class="wf-order-table">
     <thead>
       <tr>
@@ -212,17 +193,11 @@
     </tr>
   </table>
 
-  <!-- ================================ -->
-  <!-- NOTES                            -->
-  <!-- ================================ -->
   <div style="margin-top:20px;">
     <label style="font-weight:600;">Order Notes</label>
     <textarea id="orderNotes" style="width:100%; min-height:70px; padding:8px; border:1px solid #bbb; border-radius:6px; font-size:14px;"></textarea>
   </div>
 
-  <!-- ================================ -->
-  <!-- ACTION BUTTONS                   -->
-  <!-- ================================ -->
   <div id="wfActions" class="wf-actions">
     <button id="wf-print-order" type="button" style="padding: 8px 14px; font-size: 14px;">Print Order</button>
     <button id="wf-submit-order" type="button" style="padding: 10px 18px; font-size: 16px;">Submit Order</button>
@@ -233,14 +208,12 @@
 <script>
 (function(){
 
-  /* ————————————————————————————————
-     INTERNAL STATE
-     ———————————————————————————————— */
-
   let MODE = "retail";
   let PRICING = "retail";
   let CURRENT_BREEDS = [];
   let LOADED_ORDER = null;
+
+  let MODE_READY = false;
 
   const CATEGORY_ORDER = [
     "Brown Egg Layers",
@@ -254,10 +227,6 @@
   ];
 
   function formatPrice(num){ return Number(num).toFixed(2); }
-
-  /* ————————————————————————————————
-     MODE CONFIG
-     ———————————————————————————————— */
 
   const MODE_SETTINGS = {
     retail: {
@@ -297,21 +266,13 @@
     }
   };
 
-  /* ————————————————————————————————
-     APPLY MODE
-     ———————————————————————————————— */
-
   function applyMode(){
     const s = MODE_SETTINGS[MODE];
     document.getElementById("wfFormTitle").textContent = s.title;
-
     document.getElementById("staffPricingToggle").style.display =
       s.showPricingToggle ? "block" : "none";
-
-    // Toggle customer fields
     setCustomerEditable(s.customerEditable);
 
-    // Toggle buttons
     document.getElementById("wf-submit-order").style.display =
       s.readOnly ? "none" : "inline-block";
   }
@@ -324,28 +285,21 @@
     document.getElementById("orderNotes").disabled = !editable;
   }
 
-  /* ————————————————————————————————
-     HANDLE STAFF PRICING TOGGLE
-     ———————————————————————————————— */
-
   function initStaffToggle(){
     document
       .querySelectorAll("input[name='staffPriceOption']")
       .forEach(r => {
         r.addEventListener("change", ()=>{
           PRICING = r.value;
-          renderBreedTable(CURRENT_BREEDS, true); // true = preserve quantities
+          renderBreedTable(CURRENT_BREEDS, true);
         });
       });
   }
 
-  /* ————————————————————————————————
-     TABLE + HATCH DATE RENDERING
-     ———————————————————————————————— */
-
   function loadHatchDates(){
     window.parent.postMessage({type:"WF_GET_HATCHDATES"},"*");
   }
+
   function loadBreeds(){
     window.parent.postMessage({type:"WF_GET_BREEDS"},"*");
   }
@@ -413,7 +367,7 @@
         };
       }
 
-      const priceField = (PRICING === "retail") ? b.priceRetail : b.priceWholesale;
+      const priceField = (PRICING === "retail") ? b.priceRetail : b.price;
 
       if(b.sexOption==="SR") categorized[cat][b.displayName].SR = priceField;
       if(b.sexOption==="F")  categorized[cat][b.displayName].F  = priceField;
@@ -505,10 +459,6 @@
     document.getElementById("grandTotal").textContent = amt?formatPrice(amt):"";
   }
 
-  /* ————————————————————————————————
-     SUBMIT
-     ———————————————————————————————— */
-
   document.getElementById("wf-submit-order")
     .addEventListener("click", ()=>{
 
@@ -575,10 +525,6 @@
   document.getElementById("wf-print-order")
     .addEventListener("click",()=> window.print());
 
-  /* ————————————————————————————————
-     LOAD EXISTING ORDER INTO FORM
-     ———————————————————————————————— */
-
   function loadOrder(order){
     LOADED_ORDER = order;
 
@@ -612,10 +558,9 @@
     }
   }
 
-  /* ————————————————————————————————
-     PARENT MESSAGE HANDLER
-     ———————————————————————————————— */
-
+  // ================================================================
+  // *** FIXED: WAIT FOR MODE BEFORE LOADING DATA ***
+  // ================================================================
   window.addEventListener("message", (event)=>{
     const msg = event.data;
     if(!msg || !msg.type) return;
@@ -624,6 +569,11 @@
       MODE = msg.mode || "retail";
       PRICING = msg.pricing || "retail";
       applyMode();
+      MODE_READY = true;
+
+      // NOW SAFE TO LOAD DATA
+      loadHatchDates();
+      loadBreeds();
     }
 
     if(msg.type==="WF_RETURN_HATCHDATES"){
@@ -639,17 +589,10 @@
     }
   });
 
-  /* ————————————————————————————————
-     INIT
-     ———————————————————————————————— */
-
   initStaffToggle();
-  loadHatchDates();
-  loadBreeds();
 
-})();
+})();  
 </script>
 
 </body>
 </html>
-
