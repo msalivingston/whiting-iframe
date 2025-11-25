@@ -1,232 +1,652 @@
-import wixData from "wix-data";
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
 
-// ===============================================================
-// PAGE READY
-// ===============================================================
-$w.onReady(function () {
+<style>
+  /* ————————————————————————————————
+     UNIVERSAL ORDER TEMPLATE STYLES
+     ———————————————————————————————— */
 
-    console.log("WHOLESALE PAGE — READY");
+  .wf-section-row th {
+    text-align: left !important;
+    padding-left: 10px;
+  }
 
-    // Tell iframe we are in WHOLESALE MODE
-    $w("#html1").postMessage({
-        type: "WF_SET_MODE",
-        mode: "wholesale",
-        pricing: "wholesale"
-    });
+  .wf-order-wrapper {
+    font-family: Arial, sans-serif;
+    max-width: 1100px;
+    margin: 0 auto;
+    font-size: 14px;
+  }
 
-    // Listen for messages from iframe
-    $w("#html1").onMessage((rawEvent) => {
+  .wf-order-title {
+    font-size: 20px;
+    font-weight: bold;
+    margin-bottom: 0.75rem;
+  }
 
-        let msg = rawEvent.data;
-        console.log("MESSAGE RECEIVED:", msg);
+  table.wf-order-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
 
-        if (!msg || !msg.type) return;
+  table.wf-order-table th,
+  table.wf-order-table td {
+    border: 1px solid #ccc;
+    padding: 4px 6px;
+    text-align: center;
+    vertical-align: middle;
+  }
 
-        if (msg.type === "WF_GET_BREEDS") sendBreeds();
-        if (msg.type === "WF_GET_HATCHDATES") sendHatchDates();
+  table.wf-order-table th {
+    background: #f4f4f4;
+    font-weight: bold;
+  }
 
-        if (msg.type === "WF_ORDER_SUBMIT") {
-            console.log("ORDER SUBMIT RECEIVED:", msg.data);
-            handleOrderSubmit(msg.data);
-        }
-    });
+  .wf-section-row th {
+    background: #e8f0ff;
+    font-size: 15px;
+    text-align: center;
+  }
 
-});
-    
+  .wf-section-label {
+    text-align: left;
+    padding-left: 10px;
+  }
 
-// ===============================================================
-// SEND BREEDS BACK TO IFRAME — NOW INCLUDES RETAIL + WHOLESALE PRICING
-// ===============================================================
-function sendBreeds() {
-    wixData.query("Breeds")
-        .ascending("category")
-        .ascending("displayName")
-        .limit(1000)
-        .find()
-        .then(res => {
+  td.wf-breed-cell {
+    text-align: left !important;
+    font-weight: bold;
+    padding-left: 14px !important;
+  }
 
-            const items = res.items.map(i => ({
-                breedKey: i.breedKey,
-                displayName: i.displayName,
-                category: i.category,
-                sexOption: i.sexOption,
-                priceRetail: i.priceRetail,         // <— new
-                price: i.price     // <— new
-            }));
+  .wf-price-cell { white-space: nowrap; }
 
-            console.log("Sending breeds:", items.length);
+  .wf-qty-input {
+    font-size: 18px;
+    width: 60px;
+    padding: 2px 4px;
+  }
 
-            $w("#html1").postMessage({
-                type: "WF_RETURN_BREEDS",
-                breeds: items
-            });
+  td.row-qty,
+  td.row-total {
+    background-color: #fff9d6;
+    font-weight: 600;
+    color: #003366;
+    border-left: 1px solid #d0d8e0;
+    border-right: 1px solid #d0d8e0;
+  }
 
-        })
-        .catch(err => console.error("Breed load error:", err));
-}
+  .wf-actions {
+    margin-top: 14px;
+    text-align: right;
+  }
 
-
-// ===============================================================
-// SEND HATCH DATES BACK TO IFRAME
-// ===============================================================
-function sendHatchDates() {
-    wixData.query("hatchDates")
-        .ascending("isoDate")
-        .limit(1000)
-        .find()
-        .then(res => {
-
-            const items = res.items.map(i => ({
-                isoDate: i.isoDate
-            }));
-
-            console.log("Sending hatch dates:", items.length);
-
-            $w("#html1").postMessage({
-                type: "WF_RETURN_HATCHDATES",
-                hatchDates: items
-            });
-
-        })
-        .catch(err => console.error("Hatch date load error:", err));
-}
-
-
-// ===============================================================
-// CUSTOMER LOOKUP BY EMAIL
-// ===============================================================
-function findCustomerByEmail(email) {
-    return wixData.query("customerInfo")
-        .eq("Email", email)
-        .find()
-        .then(res => res.items[0] || null);
-}
-
-
-// ===============================================================
-// AUTO-INCREMENT CUSTOMER ID
-// ===============================================================
-function getNextCustomerID() {
-    return wixData.query("customerInfo")
-        .descending("CustomerID")
-        .limit(1)
-        .find()
-        .then(res => {
-            const last = res.items?.[0]?.CustomerID;
-            return last ? last + 1 : 10000;
-        });
-}
-
-
-// ===============================================================
-// CREATE CUSTOMER RECORD
-// ===============================================================
-async function createCustomer(customer) {
-
-    const nextID = await getNextCustomerID();
-
-    const newCustomer = {
-        CustomerID: nextID,
-        FirstName: customer.FirstName,
-        LastName: customer.LastName,
-        Email: customer.Email,
-        Phone: customer.Phone,
-        FarmBusinessName: customer.FarmBusinessName,
-        BillingAddress1: customer.BillingAddress1,
-        BillingAddress2: customer.BillingAddress2,
-        BillingCity: customer.BillingCity,
-        BillingState: customer.BillingState,
-        BillingZIP: customer.BillingZIP,
-        ShippingAddress1: "",
-        ShippingAddress2: "",
-        ShippingCity: "",
-        ShippingState: "",
-        ShippingZIP: "",
-        Notes: "",
-        wholesaleTrue: true,
-        active: true
-    };
-
-    return wixData.insert("customerInfo", newCustomer);
-}
-
-
-// ===============================================================
-// AUTO-INCREMENT ORDER ID
-// ===============================================================
-function getNextOrderID() {
-    return wixData.query("ChickOrders")
-        .descending("orderID")
-        .limit(1)
-        .find()
-        .then(r => (r.items?.[0]?.orderID || 30000) + 1);
-}
-
-
-// ===============================================================
-// HANDLE ORDER SUBMISSION
-// ===============================================================
-async function handleOrderSubmit(orderData) {
-    try {
-        console.log("Handling WHOLESALE order submit...");
-
-        const {
-            hatchDate,
-            grandQty,
-            grandTotal,
-            lines,
-            customer,
-            orderNotes
-        } = orderData;
-
-
-        // --- 1. CHECK OR CREATE CUSTOMER ---
-        let customerRecord = await findCustomerByEmail(customer.Email);
-
-        if (!customerRecord) {
-            console.log("Customer not found — creating...");
-            customerRecord = await createCustomer(customer);
-        } else {
-            console.log("Customer found:", customerRecord.CustomerID);
-        }
-
-
-        // --- 2. ORDER ID ---
-        const nextID = await getNextOrderID();
-
-
-        // --- 3. SAVE ORDER HEADER ---
-        const orderObj = {
-            orderID: nextID,
-            title: `Order ${nextID} - ${hatchDate}`,
-            hatchDate: hatchDate ? new Date(hatchDate) : null,
-            totalQty: Number(grandQty),
-            totalAmt: Number(grandTotal),
-            customerRef: customerRecord._id,
-            orderNotes: orderNotes || "",
-            pricingType: "wholesale"
-        };
-
-        await wixData.insert("ChickOrders", orderObj);
-        console.log("Order saved:", nextID);
-
-
-        // --- 4. SAVE LINE ITEMS ---
-        const inserts = lines.map(line =>
-            wixData.insert("ChickOrderItems", {
-                orderID: nextID,
-                breedKey: line.breedKey,
-                sex: line.sex,
-                qty: Number(line.qty),
-                price: Number(line.price),
-                lineTotal: Number(line.lineTotal)
-            })
-        );
-
-        await Promise.all(inserts);
-        console.log("Line items saved");
-
-    } catch (err) {
-        console.error("Order save error:", err);
+  @media print {
+    .wf-actions { display: none !important; }
+    .wf-order-wrapper { max-width: 100%; margin: 0; font-size: 12px; }
+    .wf-qty-input {
+      border: none; background: none; width: 100%;
     }
-}
+  }
+
+  /* Customer info */
+  .wf-input {
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 14px;
+    margin-bottom: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+
+  /* Staff pricing toggle */
+  #staffPricingToggle {
+    display: none; 
+    margin: 12px 0;
+    font-weight: bold;
+  }
+</style>
+
+</head>
+<body>
+
+<div class="wf-order-wrapper">
+
+  <!-- Title dynamically set by mode -->
+  <div id="wfFormTitle" class="wf-order-title">Chick Order Form</div>
+
+  <!-- STAFF PRICING TOGGLE (hidden unless staff mode) -->
+  <div id="staffPricingToggle">
+    Pricing:
+    <label><input type="radio" name="staffPriceOption" value="retail"> Retail</label>
+    <label style="margin-left:16px;"><input type="radio" name="staffPriceOption" value="wholesale" checked> Wholesale</label>
+  </div>
+
+  <!-- ================================ -->
+  <!-- CUSTOMER INFORMATION             -->
+  <!-- ================================ -->
+  <div id="wfCustomerInfo" style="margin-bottom:14px; font-family:Arial;">
+
+    <h3 style="margin-bottom:6px;">Customer Information</h3>
+
+    <div style="display:flex; gap:10px;">
+      <div style="flex:1;">
+        <label style="font-weight:600;">First Name *</label>
+        <input id="custFirst" type="text" class="wf-input">
+      </div>
+      <div style="flex:1;">
+        <label style="font-weight:600;">Last Name *</label>
+        <input id="custLast" type="text" class="wf-input">
+      </div>
+    </div>
+
+    <label style="font-weight:600;">Business Name</label>
+    <input id="custBusiness" type="text" class="wf-input">
+
+    <label style="font-weight:600;">Email *</label>
+    <input id="custEmail" type="email" class="wf-input">
+
+    <label style="font-weight:600;">Phone *</label>
+    <input id="custPhone" type="text" class="wf-input">
+
+    <h4 style="margin-top:10px; margin-bottom:4px;">Billing Address</h4>
+
+    <label style="font-weight:600;">Address Line 1 *</label>
+    <input id="bill1" type="text" class="wf-input">
+
+    <label style="font-weight:600;">Address Line 2</label>
+    <input id="bill2" type="text" class="wf-input">
+
+    <div style="display:flex; gap:10px;">
+      <div style="flex:1;">
+        <label style="font-weight:600;">City *</label>
+        <input id="billCity" type="text" class="wf-input">
+      </div>
+      <div style="flex:1%;">
+        <label style="font-weight:600;">State *</label>
+        <input id="billState" type="text" class="wf-input">
+      </div>
+      <div style="flex:1%;">
+        <label style="font-weight:600;">ZIP *</label>
+        <input id="billZip" type="text" class="wf-input">
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ================================ -->
+  <!-- HATCH DATE                      -->
+  <!-- ================================ -->
+  <div class="wf-order-info" style="margin-bottom: 10px;">
+    <label><strong>Requested Hatch Date:</strong></label>
+    <select id="hatchDate">
+      <option value="">-- Select hatch date --</option>
+    </select>
+  </div>
+
+  <!-- ================================ -->
+  <!-- ORDER TABLE                      -->
+  <!-- ================================ -->
+  <table class="wf-order-table">
+    <thead>
+      <tr>
+        <th rowspan="2">Breed / Description</th>
+        <th colspan="2">Straight Run</th>
+        <th colspan="2">Pullets</th>
+        <th colspan="2">Cockerels</th>
+        <th rowspan="2">Total Qty</th>
+        <th rowspan="2">Order Total</th>
+      </tr>
+    </thead>
+
+    <tbody id="breedTableBody"></tbody>
+
+    <tr class="wf-footer-row wf-grand-total-row">
+      <th colspan="7">GRAND TOTAL (All Chicks)</th>
+      <th id="grandQty" class="wf-total-cell"></th>
+      <th id="grandTotal" class="wf-total-cell"></th>
+    </tr>
+  </table>
+
+  <!-- ================================ -->
+  <!-- NOTES                            -->
+  <!-- ================================ -->
+  <div style="margin-top:20px;">
+    <label style="font-weight:600;">Order Notes</label>
+    <textarea id="orderNotes" style="width:100%; min-height:70px; padding:8px; border:1px solid #bbb; border-radius:6px; font-size:14px;"></textarea>
+  </div>
+
+  <!-- ================================ -->
+  <!-- ACTION BUTTONS                   -->
+  <!-- ================================ -->
+  <div id="wfActions" class="wf-actions">
+    <button id="wf-print-order" type="button" style="padding: 8px 14px; font-size: 14px;">Print Order</button>
+    <button id="wf-submit-order" type="button" style="padding: 10px 18px; font-size: 16px;">Submit Order</button>
+  </div>
+
+</div>
+
+<script>
+(function(){
+
+  /* ————————————————————————————————
+     INTERNAL STATE
+     ———————————————————————————————— */
+
+  let MODE = "retail";
+  let PRICING = "retail";
+  let CURRENT_BREEDS = [];
+  let LOADED_ORDER = null;
+
+  const CATEGORY_ORDER = [
+    "Brown Egg Layers",
+    "Blue Egg Layers",
+    "Green Egg Layers",
+    "White Egg Layers",
+    "Bantams",
+    "Special Rare Breeds",
+    "Meat Birds",
+    "HATCHERY CHOICE – ALL (any chick except meat/bantams)"
+  ];
+
+  function formatPrice(num){ return Number(num).toFixed(2); }
+
+  /* ————————————————————————————————
+     MODE CONFIG
+     ———————————————————————————————— */
+
+  const MODE_SETTINGS = {
+    retail: {
+      title: "2026 Chick Order Form",
+      requireFields: true,
+      customerEditable: true,
+      showPricingToggle: false,
+      readOnly: false
+    },
+    wholesale: {
+      title: "2026 Wholesale Chick Order Form",
+      requireFields: true,
+      customerEditable: false,
+      showPricingToggle: false,
+      readOnly: false
+    },
+    "staff-add": {
+      title: "Add Order (Staff)",
+      requireFields: false,
+      customerEditable: true,
+      showPricingToggle: true,
+      readOnly: false
+    },
+    "staff-edit": {
+      title: "Edit Order (Staff)",
+      requireFields: false,
+      customerEditable: true,
+      showPricingToggle: true,
+      readOnly: false
+    },
+    "staff-view": {
+      title: "View Order (Staff)",
+      requireFields: false,
+      customerEditable: false,
+      showPricingToggle: false,
+      readOnly: true
+    }
+  };
+
+  /* ————————————————————————————————
+     APPLY MODE
+     ———————————————————————————————— */
+
+  function applyMode(){
+    const s = MODE_SETTINGS[MODE];
+    document.getElementById("wfFormTitle").textContent = s.title;
+
+    document.getElementById("staffPricingToggle").style.display =
+      s.showPricingToggle ? "block" : "none";
+
+    // Toggle customer fields
+    setCustomerEditable(s.customerEditable);
+
+    // Toggle buttons
+    document.getElementById("wf-submit-order").style.display =
+      s.readOnly ? "none" : "inline-block";
+  }
+
+  function setCustomerEditable(editable){
+    document.querySelectorAll("#wfCustomerInfo input").forEach(i=>{
+      i.disabled = !editable;
+    });
+    document.getElementById("hatchDate").disabled = !editable;
+    document.getElementById("orderNotes").disabled = !editable;
+  }
+
+  /* ————————————————————————————————
+     HANDLE STAFF PRICING TOGGLE
+     ———————————————————————————————— */
+
+  function initStaffToggle(){
+    document
+      .querySelectorAll("input[name='staffPriceOption']")
+      .forEach(r => {
+        r.addEventListener("change", ()=>{
+          PRICING = r.value;
+          renderBreedTable(CURRENT_BREEDS, true); // true = preserve quantities
+        });
+      });
+  }
+
+  /* ————————————————————————————————
+     TABLE + HATCH DATE RENDERING
+     ———————————————————————————————— */
+
+  function loadHatchDates(){
+    window.parent.postMessage({type:"WF_GET_HATCHDATES"},"*");
+  }
+  function loadBreeds(){
+    window.parent.postMessage({type:"WF_GET_BREEDS"},"*");
+  }
+
+  function formatDateLabel(iso){
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined,{
+      weekday:"short",
+      month:"short",
+      day:"numeric"
+    });
+  }
+
+  function renderHatchDates(list){
+    const sel = document.getElementById("hatchDate");
+    sel.innerHTML = `<option value="">-- Select hatch date --</option>`;
+    list.forEach(item=>{
+      if(!item.isoDate) return;
+      const opt = document.createElement("option");
+      opt.value = item.isoDate;
+      opt.textContent = formatDateLabel(item.isoDate);
+      sel.appendChild(opt);
+    });
+  }
+
+  function createSectionHeader(name){
+    const tr = document.createElement("tr");
+    tr.className = "wf-section-row";
+    tr.innerHTML = `
+      <th class="wf-section-label">${name}</th>
+      <th>Qty</th><th>Price</th>
+      <th>Qty</th><th>Price</th>
+      <th>Qty</th><th>Price</th>
+      <th></th><th></th>
+    `;
+    return tr;
+  }
+
+  function renderBreedTable(breeds, preserve=false){
+    CURRENT_BREEDS = breeds;
+
+    const tbody = document.getElementById("breedTableBody");
+    const previousQuantities = {};
+
+    if(preserve){
+      document.querySelectorAll(".wf-qty-input").forEach(i=>{
+        previousQuantities[i.dataset.breed + "-" + i.dataset.sex] = i.value;
+      });
+    }
+
+    tbody.innerHTML = "";
+
+    const categorized = {};
+    CATEGORY_ORDER.forEach(c=> categorized[c] = {});
+
+    breeds.forEach(b=>{
+      const cat = b.category;
+      if(!categorized[cat]) return;
+
+      if(!categorized[cat][b.displayName]){
+        categorized[cat][b.displayName] = {
+          breedKey: b.breedKey,
+          displayName: b.displayName,
+          SR:null, F:null, M:null
+        };
+      }
+
+      const priceField = (PRICING === "retail") ? b.priceRetail : b.priceWholesale;
+
+      if(b.sexOption==="SR") categorized[cat][b.displayName].SR = priceField;
+      if(b.sexOption==="F")  categorized[cat][b.displayName].F  = priceField;
+      if(b.sexOption==="M")  categorized[cat][b.displayName].M  = priceField;
+    });
+
+    CATEGORY_ORDER.forEach(cat=>{
+      const breedsInCat = categorized[cat];
+      const names = Object.keys(breedsInCat);
+      if(!names.length) return;
+
+      tbody.appendChild(createSectionHeader(cat));
+
+      names.forEach(name=>{
+        const item = breedsInCat[name];
+        const tr = document.createElement("tr");
+        tr.className="breed-row";
+
+        const SR = item.SR ? formatPrice(item.SR) : null;
+        const F  = item.F  ? formatPrice(item.F ) : null;
+        const M  = item.M  ? formatPrice(item.M ) : null;
+
+        tr.innerHTML = `
+          <td class="wf-breed-cell">${item.displayName}</td>
+
+          <td>${SR ? `<input class="wf-qty-input" type="number" 
+                        min="0" data-breed="${item.breedKey}" data-sex="SR" data-price="${SR}">` : "—"}</td>
+          <td class="wf-price-cell">${SR || "—"}</td>
+
+          <td>${F ? `<input class="wf-qty-input" type="number" 
+                        min="0" data-breed="${item.breedKey}" data-sex="F" data-price="${F}">` : "—"}</td>
+          <td class="wf-price-cell">${F || "—"}</td>
+
+          <td>${M ? `<input class="wf-qty-input" type="number" 
+                        min="0" data-breed="${item.breedKey}" data-sex="M" data-price="${M}">` : "—"}</td>
+          <td class="wf-price-cell">${M || "—"}</td>
+
+          <td class="row-qty"></td>
+          <td class="row-total"></td>
+        `;
+
+        tbody.appendChild(tr);
+      });
+    });
+
+    attachQtyHandlers();
+
+    if(preserve){
+      document.querySelectorAll(".wf-qty-input").forEach(input=>{
+        const key = input.dataset.breed + "-" + input.dataset.sex;
+        if(previousQuantities[key]){
+          input.value = previousQuantities[key];
+        }
+      });
+    }
+
+    recalcGrandTotals();
+  }
+
+  function attachQtyHandlers(){
+    document.querySelectorAll(".wf-qty-input").forEach(input=>{
+      input.disabled = MODE_SETTINGS[MODE].readOnly;
+      input.addEventListener("input", ()=>{
+        recalcRow(input.closest("tr"));
+        recalcGrandTotals();
+      });
+    });
+  }
+
+  function recalcRow(row){
+    let qty=0, total=0;
+    row.querySelectorAll(".wf-qty-input").forEach(i=>{
+      const q = Number(i.value)||0;
+      const p = Number(i.dataset.price)||0;
+      qty += q;
+      total += q*p;
+    });
+    row.querySelector(".row-qty").textContent = qty||"";
+    row.querySelector(".row-total").textContent = total?formatPrice(total):"";
+  }
+
+  function recalcGrandTotals(){
+    let qty=0, amt=0;
+    document.querySelectorAll("tr.breed-row").forEach(row=>{
+      qty += Number(row.querySelector(".row-qty").textContent)||0;
+      amt += Number(row.querySelector(".row-total").textContent)||0;
+    });
+    document.getElementById("grandQty").textContent = qty||"";
+    document.getElementById("grandTotal").textContent = amt?formatPrice(amt):"";
+  }
+
+  /* ————————————————————————————————
+     SUBMIT
+     ———————————————————————————————— */
+
+  document.getElementById("wf-submit-order")
+    .addEventListener("click", ()=>{
+
+      const s = MODE_SETTINGS[MODE];
+
+      if(s.requireFields){
+        const required = [
+          "custFirst","custLast","custEmail","custPhone",
+          "bill1","billCity","billState","billZip"
+        ];
+        for(let id of required){
+          if(!document.getElementById(id).value.trim()){
+            alert("Please complete all required customer and billing fields.");
+            return;
+          }
+        }
+      }
+
+      const hatchDate = document.getElementById("hatchDate").value;
+
+      const lines=[];
+      document.querySelectorAll(".wf-qty-input").forEach(i=>{
+        const qty = Number(i.value);
+        if(!qty) return;
+        lines.push({
+          breedKey: i.dataset.breed,
+          sex: i.dataset.sex,
+          price: Number(i.dataset.price),
+          qty,
+          lineTotal: qty * Number(i.dataset.price)
+        });
+      });
+
+      const customer = {
+        FirstName: document.getElementById("custFirst").value,
+        LastName: document.getElementById("custLast").value,
+        FarmBusinessName: document.getElementById("custBusiness").value,
+        Email: document.getElementById("custEmail").value,
+        Phone: document.getElementById("custPhone").value,
+        BillingAddress1: document.getElementById("bill1").value,
+        BillingAddress2: document.getElementById("bill2").value,
+        BillingCity: document.getElementById("billCity").value,
+        BillingState: document.getElementById("billState").value,
+        BillingZIP: document.getElementById("billZip").value
+      };
+
+      const orderNotes = document.getElementById("orderNotes").value;
+
+      window.parent.postMessage({
+        type: "WF_ORDER_SUBMIT",
+        data: {
+          mode: MODE,
+          pricing: PRICING,
+          hatchDate,
+          grandQty: document.getElementById("grandQty").textContent,
+          grandTotal: document.getElementById("grandTotal").textContent,
+          lines,
+          customer,
+          orderNotes
+        }
+      },"*");
+    });
+
+  document.getElementById("wf-print-order")
+    .addEventListener("click",()=> window.print());
+
+  /* ————————————————————————————————
+     LOAD EXISTING ORDER INTO FORM
+     ———————————————————————————————— */
+
+  function loadOrder(order){
+    LOADED_ORDER = order;
+
+    const c = order.customer||{};
+    document.getElementById("custFirst").value = c.FirstName||"";
+    document.getElementById("custLast").value = c.LastName||"";
+    document.getElementById("custBusiness").value = c.FarmBusinessName||"";
+    document.getElementById("custEmail").value = c.Email||"";
+    document.getElementById("custPhone").value = c.Phone||"";
+
+    document.getElementById("bill1").value = c.BillingAddress1||"";
+    document.getElementById("bill2").value = c.BillingAddress2||"";
+    document.getElementById("billCity").value = c.BillingCity||"";
+    document.getElementById("billState").value = c.BillingState||"";
+    document.getElementById("billZip").value = c.BillingZIP||"";
+
+    document.getElementById("hatchDate").value = order.hatchDate||"";
+    document.getElementById("orderNotes").value = order.orderNotes||"";
+
+    if(order.lines){
+      renderBreedTable(CURRENT_BREEDS, false);
+      order.lines.forEach(l=>{
+        const input = document.querySelector(
+          `.wf-qty-input[data-breed="${l.breedKey}"][data-sex="${l.sex}"]`
+        );
+        if(input){
+          input.value = l.qty;
+        }
+      });
+      recalcGrandTotals();
+    }
+  }
+
+  /* ————————————————————————————————
+     PARENT MESSAGE HANDLER
+     ———————————————————————————————— */
+
+  window.addEventListener("message", (event)=>{
+    const msg = event.data;
+    if(!msg || !msg.type) return;
+
+    if(msg.type==="WF_SET_MODE"){
+      MODE = msg.mode || "retail";
+      PRICING = msg.pricing || "retail";
+      applyMode();
+    }
+
+    if(msg.type==="WF_RETURN_HATCHDATES"){
+      renderHatchDates(msg.hatchDates);
+    }
+
+    if(msg.type==="WF_RETURN_BREEDS"){
+      renderBreedTable(msg.breeds);
+    }
+
+    if(msg.type==="WF_LOAD_ORDER"){
+      loadOrder(msg.order);
+    }
+  });
+
+  /* ————————————————————————————————
+     INIT
+     ———————————————————————————————— */
+
+  initStaffToggle();
+  loadHatchDates();
+  loadBreeds();
+
+})();
+</script>
+
+</body>
+</html>
