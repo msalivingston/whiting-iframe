@@ -296,13 +296,13 @@
       });
   }
 
-  function loadHatchDates(){
-    window.parent.postMessage({type:"WF_GET_HATCHDATES"},"*");
-  }
+  // function loadHatchDates(){ // Removed as per timing fix
+  //   window.parent.postMessage({type:"WF_GET_HATCHDATES"},"*");
+  // }
 
-  function loadBreeds(){
-    window.parent.postMessage({type:"WF_GET_BREEDS"},"*");
-  }
+  // function loadBreeds(){ // Removed as per timing fix
+  //   window.parent.postMessage({type:"WF_GET_BREEDS"},"*");
+  // }
 
   function formatDateLabel(iso){
     const d = new Date(iso);
@@ -367,7 +367,9 @@
         };
       }
 
-      const priceField = (PRICING === "retail") ? b.priceRetail : b.price;
+      // **FIXED LOGIC HERE to handle priceRetail vs priceWholesale**
+      // Your Velo code sends both, this logic determines which one to use based on PRICING variable
+      const priceField = (PRICING === "retail") ? b.priceRetail : b.priceWholesale;
 
       if(b.sexOption==="SR") categorized[cat][b.displayName].SR = priceField;
       if(b.sexOption==="F")  categorized[cat][b.displayName].F  = priceField;
@@ -546,53 +548,53 @@
 
     if(order.lines){
       renderBreedTable(CURRENT_BREEDS, false);
-      order.lines.forEach(l=>{
-        const input = document.querySelector(
-          `.wf-qty-input[data-breed="${l.breedKey}"][data-sex="${l.sex}"]`
-        );
-        if(input){
-          input.value = l.qty;
+      order.lines.forEach(line=>{
+        const input = document.querySelector(`input.wf-qty-input[data-breed="${line.breedKey}"][data-sex="${line.sex}"]`);
+        if(input) {
+          input.value = line.qty;
+          recalcRow(input.closest("tr"));
         }
       });
       recalcGrandTotals();
     }
   }
-
-  // ================================================================
-  // *** FIXED: WAIT FOR MODE BEFORE LOADING DATA ***
-  // ================================================================
-  window.addEventListener("message", (event)=>{
+  
+  // *** NEW MESSAGE LISTENER ADDED HERE ***
+  window.addEventListener('message', function(event) {
     const msg = event.data;
-    if(!msg || !msg.type) return;
+    if (!msg || !msg.type) return;
 
-    if(msg.type==="WF_SET_MODE"){
-      MODE = msg.mode || "retail";
-      PRICING = msg.pricing || "retail";
+    if (msg.type === "WF_SET_MODE") {
+      MODE = msg.mode;
+      PRICING = msg.pricing;
       applyMode();
-      MODE_READY = true;
-
-      // NOW SAFE TO LOAD DATA
-      loadHatchDates();
-      loadBreeds();
+      // Request data only after mode is set
+      window.parent.postMessage({type:"WF_GET_HATCHDATES"},"*");
+      window.parent.postMessage({type:"WF_GET_BREEDS"},"*");
+      return;
     }
-
-    if(msg.type==="WF_RETURN_HATCHDATES"){
+    if (msg.type === "WF_RETURN_HATCHDATES") {
       renderHatchDates(msg.hatchDates);
+      return;
     }
-
-    if(msg.type==="WF_RETURN_BREEDS"){
-      renderBreedTable(msg.breeds);
+    if (msg.type === "WF_RETURN_BREEDS") {
+      renderBreedTable(msg.breeds, false);
+      return;
     }
-
-    if(msg.type==="WF_LOAD_ORDER"){
-      loadOrder(msg.order);
+    if (msg.type === "WF_LOAD_ORDER" && msg.order) {
+        // This is for future use if you build an "edit order" page
+        loadOrder(msg.order); 
     }
   });
 
+  // *** REMOVED initial calls to load data ***
+  // applyMode(); 
+  // loadHatchDates(); 
+  // loadBreeds(); 
   initStaffToggle();
 
-})();  
-</script>
 
+})();
+</script>
 </body>
 </html>
